@@ -4,6 +4,19 @@
 
 . /etc/auto-provision/autoprovision-functions.sh
 
+# Verify we are connected to the Internet
+is_connected() {
+    ping -q -c3 1.1.1.1 >/dev/null 2>&1
+    return $?
+}
+
+# Log to the system log and echo if needed
+log_say()
+{
+    echo "${1}"
+    logger "${1}"
+}
+
 installPackages()
 {
     signalAutoprovisionWaitingForUser
@@ -102,7 +115,7 @@ autoprovisionStage2()
         #/root/autoprovision-stage3.py
     else
         signalAutoprovisionWorking
-ping 19
+
 	echo Updating system time using ntp; otherwise the openwrt.org certificates are rejected as not yet valid.
         ntpd -d -q -n -p 0.openwrt.pool.ntp.org
 
@@ -134,5 +147,25 @@ EOF
         reboot
     fi
 }
+
+fixPackagesDNS()
+{
+    log_say "Fixing DNS and installing required packages for opkg"
+    # Set our router's dns
+    echo "nameserver 1.1.1.1" > /etc/resolv.conf
+
+    log_say "Installing opkg packages"
+    opkg --no-check-certificate update
+    opkg --no-check-certificate install wget-ssl unzip ca-bundle ca-certificates
+}
+
+# Check and wait for Internet connection
+while ! is_connected; do
+    log_say "Waiting for Internet connection..."
+    sleep 1
+done
+log_say "Internet connection established"
+
+fixPackagesDNS
 
 autoprovisionStage2
